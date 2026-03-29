@@ -127,7 +127,7 @@ async function handleBotao(interaction) {
   const isLider = interaction.member.roles.cache.has(process.env.CARGO_LIDER_ID);
   if (!isLider) {
     return interaction.reply({
-      content: '🚫 Apenas o líder pode aprovar ou recusar depósitos.',
+      content: '🚫 Apenas o Intendente pode aprovar ou recusar depósitos.',
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -272,7 +272,7 @@ async function cmdPagar(interaction) {
   const isLider = interaction.member.roles.cache.has(process.env.CARGO_LIDER_ID);
   if (!isLider) {
     return interaction.reply({
-      content: '🚫 Apenas o líder pode registrar pagamentos.',
+      content: '🚫 Apenas o Intendente pode registrar pagamentos.',
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -283,7 +283,7 @@ async function cmdPagar(interaction) {
   const discordId   = membro.user.id;
   const nomeUsuario = membro.displayName;
 
-  console.log(`[/pagar] Líder ${interaction.user.username} pagando ciclo de ${nomeUsuario} (${discordId})`);
+  console.log(`[/pagar] Intendente ${interaction.user.username} pagando ciclo de ${nomeUsuario} (${discordId})`);
 
   const { error } = await supabase
     .from('membros')
