@@ -18,3 +18,21 @@ export async function notificarSheets(deposito) {
     console.warn('[Sheets] Falha ao notificar:', err.message);
   }
 }
+
+export async function zerarMembroSheets(discordId) {
+  const url = process.env.SHEETS_WEBHOOK_URL;
+  if (!url || url.includes('SEU_ID')) return;
+
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action:     'zerar',
+        discord_id: discordId,
+      }),
+    });
+  } catch (err) {
+    console.warn('[Sheets] Falha ao zerar membro:', err.message);
+  }
+}

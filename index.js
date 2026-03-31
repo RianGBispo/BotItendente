@@ -10,7 +10,7 @@ import {
   MessageFlags,
 } from 'discord.js';
 import { supabase } from './supabase.js';
-import { notificarSheets } from './sheets.js';
+import { notificarSheets, zerarMembroSheets } from './sheets.js';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
@@ -82,15 +82,19 @@ async function cmdDeposito(interaction) {
 
   // Monta embed para o canal do líder
   const embed = new EmbedBuilder()
-    .setTitle('💰 Novo depósito para aprovação')
+    .setTitle('🏴‍☠️ Novo Depósito Aguardando Aprovação!')
+    .setDescription('> Um tripulante acaba de registrar um depósito.\n> Avalie o print e aprove ou recuse abaixo.')
     .setColor(0xF5A623)
+    .setThumbnail(interaction.user.displayAvatarURL())
     .setImage(print.url)
     .addFields(
-      { name: 'Membro',      value: `<@${discordId}> (${nomeUsuario})`, inline: true },
-      { name: 'Quantidade',  value: `**${quantidade.toLocaleString('pt-BR')} moedas**`,   inline: true },
-      { name: 'Enviado em',  value: `<t:${Math.floor(Date.now() / 1000)}:f>` },
+      { name: '👤 Tripulante',  value: `<@${discordId}>\n${nomeUsuario}`,                          inline: true },
+      { name: '💰 Quantidade',  value: `**${quantidade.toLocaleString('pt-BR')} moedas**`,          inline: true },
+      { name: '🕐 Enviado em',  value: `<t:${Math.floor(Date.now() / 1000)}:F>`,                   inline: false },
+      { name: '📊 Ver Ranking', value: '[Clique aqui para ver o ranking da tripulação](https://riangbispo.github.io/Metas-tripulacao/)', inline: false },
     )
-    .setFooter({ text: `ID do depósito: ${data.id}` });
+    .setFooter({ text: `ID do depósito: ${data.id}  •  Maré Negra 🏴‍☠️` })
+    .setTimestamp();
 
   const botoes = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -114,7 +118,7 @@ async function cmdDeposito(interaction) {
     return interaction.editReply({ content: '❌ Erro: o bot não tem acesso ao canal de aprovação. Contate o administrador.' });
   }
   console.log('[Discord] Enviando embed para o canal de aprovação...');
-  await canalAprovacao.send({ embeds: [embed], components: [botoes] });
+  await canalAprovacao.send({ content: `<@&${process.env.CARGO_LIDER_ID}>`, embeds: [embed], components: [botoes] });
 
   await interaction.editReply({
     content: `✅ Depósito de **${quantidade.toLocaleString('pt-BR')} moedas** enviado para aprovação do líder!`,
@@ -133,7 +137,13 @@ async function handleBotao(interaction) {
   }
 
   const [acao, depositoId] = interaction.customId.split('_');
-  await interaction.deferUpdate();
+
+  try {
+    await interaction.deferUpdate();
+  } catch (err) {
+    console.warn('[handleBotao] Interação expirada ou já respondida, ignorando:', err.message);
+    return;
+  }
 
   // Busca o depósito
   const { data: deposito, error } = await supabase
@@ -155,7 +165,7 @@ async function handleBotao(interaction) {
 
   const agora       = new Date().toISOString();
   const novoStatus  = acao === 'aprovar' ? 'aprovado' : 'recusado';
-  const liderNome   = interaction.user.username;
+  const liderNome   = interaction.member.displayName;
 
   // Atualiza no Supabase
   await supabase
@@ -295,6 +305,7 @@ async function cmdPagar(interaction) {
   }
 
   console.log(`[/pagar] Ciclo zerado para ${nomeUsuario}`);
+  await zerarMembroSheets(discordId);
   await interaction.editReply({
     content: `✅ Pagamento registrado! Nova semana iniciada para **${nomeUsuario}**.`,
   });
@@ -344,6 +355,15 @@ async function cmdStatusSemana(interaction) {
 
   await interaction.editReply({ embeds: [embed] });
 }
+
+// ─── Tratamento global de erros ───────────────────────────────────────────────
+client.on('error', err => {
+  console.error('[Client] Erro não tratado:', err.message);
+});
+
+process.on('unhandledRejection', err => {
+  console.error('[Process] Rejeição não tratada:', err?.message ?? err);
+});
 
 // ─── Login ────────────────────────────────────────────────────────────────────
 client.login(process.env.DISCORD_TOKEN);
