@@ -183,15 +183,13 @@ async function handleBotao(interaction) {
 
   await interaction.editReply({ embeds: [embedAtualizado], components: [] });
 
-  // Notifica o membro por DM
+  // Notifica o membro por DM (separado do Sheets para não bloquear um ao outro)
   try {
     const membro = await client.users.fetch(deposito.discord_id);
     if (novoStatus === 'aprovado') {
       await membro.send(
         `✅ **Depósito aprovado!**\nSeu depósito de **${deposito.quantidade.toLocaleString('pt-BR')} moedas** foi confirmado pelo líder ${liderNome}. Bom trabalho, tripulante! 🏴‍☠️`
       );
-      // Envia para o Google Sheets
-      await notificarSheets({ ...deposito, aprovado_em: agora });
     } else {
       await membro.send(
         `❌ **Depósito recusado.**\nSeu depósito de **${deposito.quantidade.toLocaleString('pt-BR')} moedas** foi recusado por ${liderNome}. Entre em contato para mais detalhes.`
@@ -199,6 +197,11 @@ async function handleBotao(interaction) {
     }
   } catch {
     console.warn(`[DM] Não foi possível enviar DM para ${deposito.discord_id}`);
+  }
+
+  // Envia para o Google Sheets (sempre, independente do DM)
+  if (novoStatus === 'aprovado') {
+    await notificarSheets({ ...deposito, aprovado_em: agora });
   }
 }
 
@@ -328,7 +331,7 @@ async function cmdStatusSemana(interaction) {
 
   const { data: depositos, error: erroDepositos } = await supabase
     .from('depositos')
-    .select('discord_id, quantidade, status, created_at')
+    .select('discord_id, quantidade, status, aprovado_em')
     .eq('status', 'aprovado');
 
   if (erroDepositos) {
@@ -339,7 +342,7 @@ async function cmdStatusSemana(interaction) {
   const linhas = membros.map(m => {
     const desde = new Date(m.ciclo_iniciado_em);
     const totalSemana = (depositos ?? [])
-      .filter(d => d.discord_id === m.discord_id && new Date(d.created_at) >= desde)
+      .filter(d => d.discord_id === m.discord_id && new Date(d.aprovado_em) >= desde)
       .reduce((acc, d) => acc + d.quantidade, 0);
 
     const icone = totalSemana > 0 ? '✅' : '❌';

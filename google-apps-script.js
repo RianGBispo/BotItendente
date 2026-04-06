@@ -2,11 +2,12 @@
  * Cole este código no Google Apps Script vinculado à sua planilha:
  * Extensões → Apps Script → cole e publique como Web App
  *
- * A planilha precisa ter uma aba chamada "Histórico" com as colunas:
- * A: Discord ID | B: Nome | C: Quantidade | D: Aprovado em | E: Print URL | F: Zerado
+ * A planilha precisa ter:
+ *   Aba "Histórico"  → A: Discord ID | B: Nome | C: Quantidade | D: Aprovado em | E: Print URL | F: Pago
+ *   Aba "Tripulação" → A: Discord ID | B: Nome | C: Total de moedas (acumulado)
  *
- * E uma aba "Tripulação" com:
- * A: Discord ID | B: Nome | C: Total de moedas (fórmula: =SUMIFS(Histórico!C:C,Histórico!A:A,A2,Histórico!F:F,FALSE))
+ * IMPORTANTE: Formate a coluna A de ambas as abas como "Texto simples"
+ * para evitar perda de precisão nos IDs do Discord.
  */
 
 function doPost(e) {
@@ -14,14 +15,27 @@ function doPost(e) {
     const payload = JSON.parse(e.postData.contents);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // ── Zerar ciclo de um membro ────────────────────────────────
-    if (payload.action === 'zerar') {
-      const abaHistorico = ss.getSheetByName('Histórico');
-      const dados = abaHistorico.getDataRange().getValues();
+    // ── Registrar pagamento: marca todos os depósitos do membro como pago = true ──
+    if (payload.action === 'pagar') {
+      const id = String(payload.discord_id);
 
-      for (let i = 1; i < dados.length; i++) {
-        if (String(dados[i][0]) === String(payload.discord_id)) {
-          abaHistorico.getRange(i + 1, 6).setValue(true); // coluna F = Zerado
+      const abaHistorico = ss.getSheetByName('Histórico');
+      const displayHistorico = abaHistorico.getDataRange().getDisplayValues();
+
+      for (let i = 1; i < displayHistorico.length; i++) {
+        if (displayHistorico[i][0] === id) {
+          abaHistorico.getRange(i + 1, 6).setValue(true); // coluna F = Pago
+        }
+      }
+
+      // Zera o total acumulado na aba Tripulação
+      const abaTotais = ss.getSheetByName('Tripulação');
+      const displayTotais = abaTotais.getDataRange().getDisplayValues();
+
+      for (let i = 1; i < displayTotais.length; i++) {
+        if (displayTotais[i][0] === id) {
+          abaTotais.getRange(i + 1, 3).setValue(0);
+          break;
         }
       }
 
@@ -30,16 +44,44 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // ── Registrar depósito aprovado ─────────────────────────────
+    // ── Registrar depósito aprovado ─────────────────────────────────
+    // Proteção: se quantidade não é número, é uma chamada inválida
+    if (typeof payload.quantidade !== 'number') {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: 'quantidade inválida' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const id = String(payload.discord_id);
+
     const abaHistorico = ss.getSheetByName('Histórico');
     abaHistorico.appendRow([
-      payload.discord_id,
+      id,
       payload.nome,
       payload.quantidade,
-      payload.aprovado_em,
+      payload.data,
       payload.print_url,
-      false, // F: Zerado = false por padrão
+      false, // coluna F = Pago (começa como false)
     ]);
+
+    const abaTotais = ss.getSheetByName('Tripulação');
+    const displayTotais = abaTotais.getDataRange().getDisplayValues();
+    let linhaExistente = -1;
+
+    for (let i = 1; i < displayTotais.length; i++) {
+      if (displayTotais[i][0] === id) {
+        linhaExistente = i + 1;
+        break;
+      }
+    }
+
+    if (linhaExistente > 0) {
+      const rawTotal = abaTotais.getRange(linhaExistente, 3).getValue();
+      const totalAtual = (typeof rawTotal === 'number' && !isNaN(rawTotal)) ? rawTotal : 0;
+      abaTotais.getRange(linhaExistente, 3).setValue(totalAtual + payload.quantidade);
+    } else {
+      abaTotais.appendRow([id, payload.nome, payload.quantidade]);
+    }
 
     return ContentService
       .createTextOutput(JSON.stringify({ ok: true }))
